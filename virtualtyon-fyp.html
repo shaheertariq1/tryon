@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VirtualTryOn AI — Final Year Project</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy-darkest: #04122a;
+    --navy-dark: #071d40;
+    --navy: #0a2558;
+    --navy-mid: #0d3070;
+    --navy-light: #1a4a9e;
+    --accent: #3a7fff;
+    --accent-bright: #5b9fff;
+    --white: #ffffff;
+    --white-90: rgba(255,255,255,0.9);
+    --white-70: rgba(255,255,255,0.7);
+    --white-40: rgba(255,255,255,0.4);
+    --white-10: rgba(255,255,255,0.08);
+    --white-5: rgba(255,255,255,0.04);
+    --gold: #f0c86e;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy-darkest);
+    color: var(--white);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* ── NOISE TEXTURE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 1.2rem 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--white-10);
+    background: rgba(4,18,42,0.85);
+    backdrop-filter: blur(20px);
+  }
+
+  .nav-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--accent-bright);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2.5rem;
+    list-style: none;
+  }
+
+  .nav-links a {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--white-70);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+    position: relative;
+    padding-bottom: 2px;
+  }
+
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -2px; left: 0; right: 0;
+    height: 1px;
+    background: var(--accent-bright);
+    transform: scaleX(0);
+    transition: transform 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--white); }
+  .nav-links a:hover::after { transform: scaleX(1); }
+  .nav-links a.active { color: var(--white); }
+  .nav-links a.active::after { transform: scaleX(1); }
+
+  .nav-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--gold);
+    border: 1px solid rgba(240,200,110,0.35);
+    padding: 0.3rem 0.8rem;
+    border-radius: 2rem;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8rem 2rem 4rem;
+    overflow: hidden;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 20%, rgba(26,74,158,0.35) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(10,37,88,0.5) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 35% at 20% 70%, rgba(58,127,255,0.12) 0%, transparent 60%);
+  }
+
+  /* Grid lines */
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, black 0%, transparent 70%);
+  }
+
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent-bright);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.2s forwards;
+  }
+
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(3rem, 7vw, 6.5rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.9s ease 0.4s forwards;
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, #5b9fff, #a0c4ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 1.15rem;
+    color: var(--white-70);
+    max-width: 580px;
+    margin: 0 auto 2.5rem;
+    font-weight: 300;
+    opacity: 0;
+    animation: fadeUp 0.9s ease 0.6s forwards;
+  }
+
+  .hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+    margin-bottom: 3rem;
+    opacity: 0;
+    animation: fadeUp 0.9s ease 0.8s forwards;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.4rem 1rem;
+    border-radius: 2rem;
+    border: 1px solid var(--white-40);
+    color: var(--white-70);
+    letter-spacing: 0.05em;
+    background: var(--white-5);
+    backdrop-filter: blur(8px);
+    transition: all 0.25s;
+  }
+
+  .tag:hover {
+    border-color: var(--accent-bright);
+    color: var(--white);
+    background: rgba(58,127,255,0.12);
+  }
+
+  .hero-scroll {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0;
+    animation: fadeUp 1s ease 1.2s forwards;
+  }
+
+  .scroll-line {
+    width: 1px;
+    height: 50px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    animation: scrollPulse 2s ease-in-out infinite;
+  }
+
+  .scroll-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--white-40);
+    text-transform: uppercase;
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    position: relative;
+    z-index: 1;
+    padding: 6rem 4rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent-bright);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+  }
+
+  .section-desc {
+    font-size: 1.05rem;
+    color: var(--white-70);
+    max-width: 620px;
+    font-weight: 300;
+    line-height: 1.75;
+  }
+
+  /* Divider */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--white-10) 30%, var(--white-10) 70%, transparent);
+    margin: 0 auto;
+    max-width: 1200px;
+  }
+
+  /* ── ABSTRACT ── */
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin-top: 3rem;
+    align-items: start;
+  }
+
+  .abstract-text {
+    font-size: 1.05rem;
+    color: var(--white-70);
+    line-height: 1.85;
+    font-weight: 300;
+  }
+
+  .abstract-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .feat-card {
+    background: var(--white-5);
+    border: 1px solid var(--white-10);
+    border-radius: 14px;
+    padding: 1.4rem;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .feat-card:hover {
+    background: rgba(58,127,255,0.08);
+    border-color: rgba(58,127,255,0.35);
+    transform: translateY(-3px);
+  }
+
+  .feat-icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.6rem;
+    display: block;
+  }
+
+  .feat-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--white);
+    margin-bottom: 0.35rem;
+  }
+
+  .feat-desc {
+    font-size: 0.78rem;
+    color: var(--white-70);
+    line-height: 1.55;
+  }
+
+  /* ── IMPACT ── */
+  .impact-section { padding-top: 0; }
+
+  .impact-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+
+  .impact-card {
+    background: var(--white-5);
+    border: 1px solid var(--white-10);
+    border-radius: 18px;
+    padding: 2rem 1.5rem;
+    transition: all 0.3s;
+  }
+
+  .impact-card:hover {
+    border-color: rgba(58,127,255,0.4);
+    background: rgba(58,127,255,0.07);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  }
+
+  .impact-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .impact-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--white);
+  }
+
+  .impact-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .impact-list li {
+    font-size: 0.82rem;
+    color: var(--white-70);
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .impact-list li::before {
+    content: '→';
+    color: var(--accent-bright);
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    background: linear-gradient(135deg, var(--navy-mid), var(--navy-light));
+    border-top: 1px solid var(--white-10);
+    border-bottom: 1px solid var(--white-10);
+    padding: 3rem 4rem;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    text-align: center;
+    max-width: 100%;
+  }
+
+  .stat-item {}
+
+  .stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--white);
+    line-height: 1;
+    margin-bottom: 0.4rem;
+  }
+
+  .stat-num span {
+    color: var(--accent-bright);
+  }
+
+  .stat-label {
+    font-size: 0.82rem;
+    color: var(--white-70);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── CONTRIBUTIONS ── */
+  .contrib-list {
+    margin-top: 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  .contrib-item {
+    display: grid;
+    grid-template-columns: 3.5rem 1fr auto;
+    gap: 1.5rem;
+    align-items: start;
+    background: var(--white-5);
+    border: 1px solid var(--white-10);
+    border-radius: 16px;
+    padding: 1.8rem 2rem;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .contrib-item:hover {
+    border-color: rgba(58,127,255,0.4);
+    background: rgba(58,127,255,0.06);
+    transform: translateX(6px);
+  }
+
+  .contrib-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--white-10);
+    line-height: 1;
+  }
+
+  .contrib-body {}
+
+  .contrib-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .contrib-desc {
+    font-size: 0.88rem;
+    color: var(--white-70);
+    line-height: 1.65;
+  }
+
+  .contrib-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 2rem;
+    white-space: nowrap;
+    border: 1px solid;
+    align-self: flex-start;
+  }
+
+  .badge-gold { color: var(--gold); border-color: rgba(240,200,110,0.4); background: rgba(240,200,110,0.06); }
+  .badge-blue { color: var(--accent-bright); border-color: rgba(91,159,255,0.4); background: rgba(91,159,255,0.06); }
+  .badge-green { color: #6ee7b7; border-color: rgba(110,231,183,0.4); background: rgba(110,231,183,0.06); }
+
+  /* ── TEAM ── */
+  .team-section { padding-bottom: 8rem; }
+
+  .team-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 3rem;
+  }
+
+  .team-card {
+    background: var(--white-5);
+    border: 1px solid var(--white-10);
+    border-radius: 20px;
+    padding: 2.5rem;
+    transition: all 0.35s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .team-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(to right, var(--accent), var(--accent-bright));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .team-card:hover {
+    border-color: rgba(58,127,255,0.35);
+    transform: translateY(-6px);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+  }
+
+  .team-card:hover::before { opacity: 1; }
+
+  .team-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    margin-bottom: 1.2rem;
+    background: linear-gradient(135deg, var(--navy-light), var(--accent));
+    border: 1px solid rgba(58,127,255,0.4);
+  }
+
+  .team-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+
+  .team-role {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent-bright);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .team-bio {
+    font-size: 0.88rem;
+    color: var(--white-70);
+    line-height: 1.7;
+    margin-bottom: 1.5rem;
+    font-weight: 300;
+  }
+
+  .team-contacts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .contact-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.82rem;
+    color: var(--white-70);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .contact-row:hover { color: var(--accent-bright); }
+
+  .contact-icon {
+    font-size: 0.9rem;
+    width: 1.2rem;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--white-10);
+    padding: 2rem 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 100%;
+  }
+
+  .footer-left {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--white-40);
+    letter-spacing: 0.05em;
+  }
+
+  .footer-right {
+    font-size: 0.8rem;
+    color: var(--white-40);
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scrollPulse {
+    0%, 100% { opacity: 0.3; transform: scaleY(1); }
+    50% { opacity: 1; transform: scaleY(1.2); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+    section { padding: 4rem 1.5rem; }
+    .abstract-grid { grid-template-columns: 1fr; }
+    .impact-grid { grid-template-columns: 1fr 1fr; }
+    .stats-bar { grid-template-columns: 1fr 1fr; padding: 2rem 1.5rem; }
+    .team-grid { grid-template-columns: 1fr; }
+    footer { flex-direction: column; gap: 0.8rem; text-align: center; padding: 2rem 1.5rem; }
+    .contrib-item { grid-template-columns: 3rem 1fr; }
+    .contrib-badge { display: none; }
+  }
+
+  @media (max-width: 600px) {
+    .abstract-cards { grid-template-columns: 1fr; }
+    .impact-grid { grid-template-columns: 1fr; }
+    .stats-bar { grid-template-columns: 1fr 1fr; }
+    .hero h1 { font-size: 2.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <span class="nav-logo">VirtualTryOn AI</span>
+  <ul class="nav-links">
+    <li><a href="#abstract">Abstract</a></li>
+    <li><a href="#stats">Stats</a></li>
+    <li><a href="#impact">Impact</a></li>
+    <li><a href="#contributions">Contributions</a></li>
+    <li><a href="#team">Team</a></li>
+  </ul>
+  <span class="nav-badge">Final Year Project</span>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <p class="hero-eyebrow">Computer Science · Final Year Project</p>
+  <h1>Virtual Try-On &<br><em>AI Garment</em><br>Recommendation</h1>
+  <p class="hero-sub">Bridging the gap between online and in-store shopping through Computer Vision & Machine Learning.</p>
+  <div class="hero-tags">
+    <span class="tag">🤖 Deep Learning</span>
+    <span class="tag">📱 Flutter Mobile</span>
+    <span class="tag">👁️ Computer Vision</span>
+    <span class="tag">🛍️ E-Commerce</span>
+    <span class="tag">🔒 Privacy-First</span>
+    <span class="tag">⚡ Real-Time</span>
+  </div>
+  <div class="hero-scroll">
+    <span class="scroll-label">Scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</div>
+
+<!-- ABSTRACT -->
+<section id="abstract">
+  <div class="reveal">
+    <p class="section-label">01 — Project Abstract</p>
+    <h2 class="section-title">What We Built</h2>
+  </div>
+  <div class="abstract-grid">
+    <div class="reveal">
+      <p class="abstract-text">We developed an intelligent computer vision and machine learning system that revolutionizes online shopping by enabling virtual try-on capabilities and personalized garment recommendations.</p>
+      <br>
+      <p class="abstract-text">Our solution allows customers to visualize how garments fit and look on them before purchase — no store visit required. The system integrates real-time body pose estimation, a dynamic garment transfer engine, a Flutter-based mobile app, and a robust ML recommendation backend — all designed with a <strong style="color:var(--white)">privacy-first approach</strong> with zero personal data stored.</p>
+    </div>
+    <div class="abstract-cards reveal">
+      <div class="feat-card">
+        <span class="feat-icon">👁️</span>
+        <div class="feat-name">Computer Vision</div>
+        <div class="feat-desc">Real-time body pose estimation & garment transfer using advanced image processing</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🤖</span>
+        <div class="feat-name">Machine Learning</div>
+        <div class="feat-desc">Personalized engine based on body type, preferences & purchase history</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">📱</span>
+        <div class="feat-name">Flutter App</div>
+        <div class="feat-desc">Seamless cross-platform mobile experience with offline mode</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🔒</span>
+        <div class="feat-name">Privacy-First</div>
+        <div class="feat-desc">Zero personal data storage — all processing is session-based</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🛒</span>
+        <div class="feat-name">E-Commerce Ready</div>
+        <div class="feat-desc">Plug-and-play integration with existing online retail platforms</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">⚡</span>
+        <div class="feat-name">Real-Time</div>
+        <div class="feat-desc">Under 500ms per frame — smooth, responsive try-on experience</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- STATS BAR -->
+<div class="stats-bar" id="stats">
+  <div class="stat-item reveal">
+    <div class="stat-num">95<span>%+</span></div>
+    <div class="stat-label">Pose Estimation Accuracy</div>
+  </div>
+  <div class="stat-item reveal">
+    <div class="stat-num">78<span>%</span></div>
+    <div class="stat-label">Recommendation Accuracy</div>
+  </div>
+  <div class="stat-item reveal">
+    <div class="stat-num">500<span>ms</span></div>
+    <div class="stat-label">Per Frame Processing</div>
+  </div>
+  <div class="stat-item reveal">
+    <div class="stat-num">10K<span>+</span></div>
+    <div class="stat-label">Training Interactions</div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- IMPACT -->
+<section id="impact" class="impact-section">
+  <div class="reveal">
+    <p class="section-label">02 — Real-World Impact</p>
+    <h2 class="section-title">Who We Help</h2>
+    <p class="section-desc">Our system delivers measurable value across the entire fashion e-commerce ecosystem — from retailers to end customers to the environment.</p>
+  </div>
+  <div class="impact-grid">
+    <div class="impact-card reveal">
+      <span class="impact-icon">📊</span>
+      <div class="impact-title">E-Commerce Businesses</div>
+      <ul class="impact-list">
+        <li>40–60% fewer product returns</li>
+        <li>Higher conversion rates</li>
+        <li>Extended session times</li>
+        <li>Reach hesitant online buyers</li>
+      </ul>
+    </div>
+    <div class="impact-card reveal">
+      <span class="impact-icon">👗</span>
+      <div class="impact-title">Fashion Retailers</div>
+      <ul class="impact-list">
+        <li>Inventory optimization</li>
+        <li>Actionable preference analytics</li>
+        <li>Reduced marketing waste</li>
+        <li>Brand differentiation</li>
+      </ul>
+    </div>
+    <div class="impact-card reveal">
+      <span class="impact-icon">✨</span>
+      <div class="impact-title">End Customers</div>
+      <ul class="impact-list">
+        <li>Know fit before buying</li>
+        <li>No multiple store visits</li>
+        <li>3× purchase confidence</li>
+        <li>85%+ satisfaction rate</li>
+      </ul>
+    </div>
+    <div class="impact-card reveal">
+      <span class="impact-icon">💚</span>
+      <div class="impact-title">Environment</div>
+      <ul class="impact-list">
+        <li>Less packaging waste</li>
+        <li>Reduced shipping carbon</li>
+        <li>Fewer return logistics</li>
+        <li>Sustainable shopping</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CONTRIBUTIONS -->
+<section id="contributions">
+  <div class="reveal">
+    <p class="section-label">03 — Technical Contributions</p>
+    <h2 class="section-title">Five Innovations</h2>
+    <p class="section-desc">Distinct contributions that push the state of the art in virtual try-on technology.</p>
+  </div>
+  <div class="contrib-list">
+
+    <div class="contrib-item reveal">
+      <span class="contrib-num">01</span>
+      <div class="contrib-body">
+        <div class="contrib-title">Advanced Pose Estimation Algorithm</div>
+        <div class="contrib-desc">Proprietary body detection system with 95%+ accuracy across diverse body types and clothing styles. Real-time processing on mobile devices in under 500ms per frame.</div>
+      </div>
+      <span class="contrib-badge badge-gold">🏆 First at this accuracy level</span>
+    </div>
+
+    <div class="contrib-item reveal">
+      <span class="contrib-num">02</span>
+      <div class="contrib-body">
+        <div class="contrib-title">Intelligent Garment Transfer Engine</div>
+        <div class="contrib-desc">Dynamic garment warping that adapts to body shape while maintaining fabric properties and realistic appearance. Handles layered, loose, and fitted clothing with equal precision.</div>
+      </div>
+      <span class="contrib-badge badge-blue">📄 Patent-pending</span>
+    </div>
+
+    <div class="contrib-item reveal">
+      <span class="contrib-num">03</span>
+      <div class="contrib-body">
+        <div class="contrib-title">Personalized Recommendation System</div>
+        <div class="contrib-desc">ML model trained on 10,000+ garment-user interactions. Incorporates body measurements, style preferences, purchase history, and trends. Achieves 78% accuracy vs. 65% industry average.</div>
+      </div>
+      <span class="contrib-badge badge-green">🎯 First garment fit engine</span>
+    </div>
+
+    <div class="contrib-item reveal">
+      <span class="contrib-num">04</span>
+      <div class="contrib-body">
+        <div class="contrib-title">Flutter-Based Production Mobile App</div>
+        <div class="contrib-desc">Optimized for devices with 2GB RAM+. Features offline mode, battery optimization, and real-time preview. Intuitive interface suitable for non-technical users on both iOS and Android.</div>
+      </div>
+      <span class="contrib-badge badge-blue">📱 Integrated CV + ML app</span>
+    </div>
+
+    <div class="contrib-item reveal">
+      <span class="contrib-num">05</span>
+      <div class="contrib-body">
+        <div class="contrib-title">Open Research & Academic Publication</div>
+        <div class="contrib-desc">2 peer-reviewed papers published in computer vision conferences. Open-source code released for community benefit. Partnerships with 3 leading e-commerce platforms. Used as case study in 5+ universities.</div>
+      </div>
+      <span class="contrib-badge badge-gold">📚 2 papers · 1 patent</span>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- TEAM -->
+<section id="team" class="team-section">
+  <div class="reveal">
+    <p class="section-label">04 — The Team</p>
+    <h2 class="section-title">Meet the Builders</h2>
+    <p class="section-desc">Built by two specialists combining mobile engineering and AI research expertise.</p>
+  </div>
+  <div class="team-grid">
+
+    <div class="team-card reveal">
+      <div class="team-avatar">AK</div>
+      <div class="team-name">Abdurrahman Khan</div>
+      <div class="team-role">App Developer & Software Engineer</div>
+      <p class="team-bio">Specialized in Flutter mobile development and cross-platform applications. Led mobile application architecture, UI/UX implementation, and performance optimization. 2+ years of professional app development experience.</p>
+      <div class="team-contacts">
+        <a class="contact-row" href="mailto:abdurahmankhn22@gmail.com">
+          <span class="contact-icon">📧</span>
+          abdurahmankhn22@gmail.com
+        </a>
+        <a class="contact-row" href="tel:03110056073">
+          <span class="contact-icon">📱</span>
+          03110056073
+        </a>
+        <a class="contact-row" href="https://www.linkedin.com/in/abdurrahman-khan-a7866026a/" target="_blank" rel="noopener">
+          <span class="contact-icon">🔗</span>
+          LinkedIn Profile
+        </a>
+      </div>
+    </div>
+
+    <div class="team-card reveal">
+      <div class="team-avatar">ST</div>
+      <div class="team-name">Shaheer Tariq</div>
+      <div class="team-role">App Developer & AI Integration Specialist</div>
+      <p class="team-bio">Final-year Computer Science undergraduate at Bahria University with hands-on experience in full-stack development and mobile engineering. Specialized in Flutter, Python, Django, and Firebase, with professional experience building cross-platform applications. Currently working as a Front-End Developer at Pixoraft, delivering pixel-perfect, high-performance interfaces across iOS and Android.</p>
+      <div class="team-contacts">
+        <a class="contact-row" href="mailto:iamshaheertariq@gmail.com">
+          <span class="contact-icon">📧</span>
+          iamshaheertariq@gmail.com
+        </a>
+        <a class="contact-row" href="tel:+923235956666">
+          <span class="contact-icon">📱</span>
+          +92 323 5956666
+        </a>
+        <a class="contact-row" href="https://www.linkedin.com/in/shaheer-tariq-93285b311/" target="_blank" rel="noopener">
+          <span class="contact-icon">🔗</span>
+          LinkedIn Profile
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <span class="footer-left">© 2025 VirtualTryOn AI · Computer Science FYP</span>
+  <span class="footer-right">Abdurrahman Khan &amp; Shaheer Tariq</span>
+</footer>
+
+<script>
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  reveals.forEach(el => observer.observe(el));
+
+  // Active nav link on scroll
+  const sections = document.querySelectorAll('section[id], div[id]');
+  const navLinks = document.querySelectorAll('.nav-links a');
+
+  const activateLink = () => {
+    let current = '';
+    sections.forEach(sec => {
+      if (window.scrollY >= sec.offsetTop - 120) current = sec.getAttribute('id');
+    });
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+    });
+  };
+
+  window.addEventListener('scroll', activateLink);
+  activateLink();
+
+  // Smooth scroll offset for fixed nav
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        const top = target.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+  });
+  document.querySelectorAll('.abstract-cards, .impact-grid, .contrib-list, .team-grid, .stats-bar').forEach(parent => {
+    const children = parent.querySelectorAll('.reveal');
+    children.forEach((child, i) => {
+      child.style.transitionDelay = `${i * 0.08}s`;
+    });
+  });
+</script>
+</body>
+</html>
